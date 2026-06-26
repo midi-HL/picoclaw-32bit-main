@@ -106,6 +106,8 @@ type MessageBus struct {
 	publishMu      sync.Mutex
 	streamDelegate atomic.Value // stores StreamDelegate
 	eventPublisher atomic.Value // stores EventPublisher
+	outboundHook   atomic.Value // stores func(OutboundMessage) bool
+	outboundMediaHook atomic.Value // stores func(OutboundMediaMessage) bool
 	inboundStats   streamStats
 	outboundStats  streamStats
 	mediaStats     streamStats
@@ -235,11 +237,29 @@ func (mb *MessageBus) InboundChan() <-chan InboundMessage {
 	return mb.inbound
 }
 
+// SetOutboundHook registers a hook that is called for each outbound message.
+// If the hook returns true, the message is consumed and not sent to the channel.
+func (mb *MessageBus) SetOutboundHook(hook func(OutboundMessage) bool) {
+	mb.outboundHook.Store(hook)
+}
+
+// SetOutboundMediaHook registers a hook that is called for each outbound media message.
+// If the hook returns true, the message is consumed and not sent to the channel.
+func (mb *MessageBus) SetOutboundMediaHook(hook func(OutboundMediaMessage) bool) {
+	mb.outboundMediaHook.Store(hook)
+}
+
 func (mb *MessageBus) PublishOutbound(ctx context.Context, msg OutboundMessage) error {
 	msg = NormalizeOutboundMessage(msg)
 	if msg.Context.isZero() {
 		mb.publishFailure("outbound", runtimeScopeFromInboundContext(msg.Context), ErrMissingOutboundContext)
 		return ErrMissingOutboundContext
+	}
+	// Let hook consume the message if interested (e.g. REST API chat collector).
+	if hook, ok := mb.outboundHook.Load().(func(OutboundMessage) bool); ok && hook != nil {
+		if hook(msg) {
+			return nil
+		}
 	}
 	if err := publish(ctx, mb, mb.outbound, msg, publishPolicy{
 		stream: "outbound",
@@ -262,6 +282,12 @@ func (mb *MessageBus) PublishOutboundMedia(ctx context.Context, msg OutboundMedi
 	if msg.Context.isZero() {
 		mb.publishFailure("outbound_media", runtimeScopeFromInboundContext(msg.Context), ErrMissingOutboundMediaContext)
 		return ErrMissingOutboundMediaContext
+	}
+	// Let hook consume the message if interested.
+	if hook, ok := mb.outboundMediaHook.Load().(func(OutboundMediaMessage) bool); ok && hook != nil {
+		if hook(msg) {
+			return nil
+		}
 	}
 	if err := publish(ctx, mb, mb.outboundMedia, msg, publishPolicy{
 		stream: "outbound_media",

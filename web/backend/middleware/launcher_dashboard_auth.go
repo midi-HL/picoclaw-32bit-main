@@ -263,6 +263,10 @@ func isPublicLauncherDashboardPath(method, p string) bool {
 	case "/api/auth/setup":
 		return method == http.MethodPost
 	}
+	// Open REST API: all /api/ endpoints are accessible without dashboard cookie.
+	if strings.HasPrefix(p, "/api/") {
+		return true
+	}
 	return false
 }
 

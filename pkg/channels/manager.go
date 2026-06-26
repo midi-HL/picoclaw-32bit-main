@@ -1156,6 +1156,26 @@ func (m *Manager) registerChannelHTTPHandler(name string, ch Channel) {
 	}
 }
 
+// RegisterHTTPHandler registers a custom HTTP handler on the shared gateway mux.
+// This allows the gateway to expose additional HTTP endpoints (e.g. REST API)
+// alongside channel webhooks. The handler is registered at the given path.
+func (m *Manager) RegisterHTTPHandler(path string, handler http.Handler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.mux != nil {
+		m.mux.Handle(path, handler)
+	}
+}
+
+// RegisterHTTPHandlerFunc registers a custom HTTP handler function on the shared gateway mux.
+func (m *Manager) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.mux != nil {
+		m.mux.HandleFunc(path, handler)
+	}
+}
+
 // unregisterChannelHTTPHandler removes the webhook/health handlers for a
 // single channel from m.mux.
 func (m *Manager) unregisterChannelHTTPHandler(name string, ch Channel) {

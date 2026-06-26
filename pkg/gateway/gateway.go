@@ -459,6 +459,15 @@ func setupAndStartServices(
 		return nil, fmt.Errorf("error starting channels: %w", err)
 	}
 
+	// Register REST API chat endpoints on the shared gateway HTTP mux.
+	chatAPI := NewChatAPIHandler(msgBus)
+	runningServices.ChannelManager.RegisterHTTPHandlerFunc("/api/chat", chatAPI.handleChat)
+	runningServices.ChannelManager.RegisterHTTPHandlerFunc("/api/chat/stream", chatAPI.handleChatStream)
+
+	// Hook outbound message collector for REST API responses.
+	msgBus.SetOutboundHook(CollectOutboundResponse)
+	msgBus.SetOutboundMediaHook(CollectOutboundMediaResponse)
+
 	logChannelVoiceCapabilities(runningServices.ChannelManager, transcriber != nil, ttsAvailable)
 
 	if transcriber != nil {
