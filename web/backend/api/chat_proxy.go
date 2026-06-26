@@ -22,8 +22,8 @@ func (h *Handler) handleChatProxy(w http.ResponseWriter, r *http.Request) {
 	target := h.gatewayProxyURL()
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
-			req.Scheme = target.Scheme
-			req.Host = target.Host
+			req.URL.Scheme = target.Scheme
+			req.URL.Host = target.Host
 		},
 	}
 	proxy.ServeHTTP(w, r)
