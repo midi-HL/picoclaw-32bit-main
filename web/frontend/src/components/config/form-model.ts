@@ -3,6 +3,9 @@ export type JsonRecord = Record<string, unknown>
 export interface CoreConfigForm {
   workspace: string
   restrictToWorkspace: boolean
+  allowReadOutsideWorkspace: boolean
+  allowReadPathsText: string
+  allowWritePathsText: string
   splitOnMarker: boolean
   toolFeedbackEnabled: boolean
   toolFeedbackMaxArgsLength: string
@@ -154,6 +157,9 @@ export const DM_SCOPE_OPTIONS = [
 export const EMPTY_FORM: CoreConfigForm = {
   workspace: "",
   restrictToWorkspace: true,
+  allowReadOutsideWorkspace: false,
+  allowReadPathsText: "",
+  allowWritePathsText: "",
   splitOnMarker: false,
   toolFeedbackEnabled: false,
   toolFeedbackMaxArgsLength: "300",
@@ -368,6 +374,20 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
       defaults.restrict_to_workspace === undefined
         ? EMPTY_FORM.restrictToWorkspace
         : asBool(defaults.restrict_to_workspace),
+    allowReadOutsideWorkspace:
+      defaults.allow_read_outside_workspace === undefined
+        ? EMPTY_FORM.allowReadOutsideWorkspace
+        : asBool(defaults.allow_read_outside_workspace),
+    allowReadPathsText: Array.isArray(defaults.allow_read_paths)
+      ? defaults.allow_read_paths
+          .filter((v): v is string => typeof v === "string")
+          .join("\n")
+      : EMPTY_FORM.allowReadPathsText,
+    allowWritePathsText: Array.isArray(defaults.allow_write_paths)
+      ? defaults.allow_write_paths
+          .filter((v): v is string => typeof v === "string")
+          .join("\n")
+      : EMPTY_FORM.allowWritePathsText,
     splitOnMarker:
       defaults.split_on_marker === undefined
         ? EMPTY_FORM.splitOnMarker

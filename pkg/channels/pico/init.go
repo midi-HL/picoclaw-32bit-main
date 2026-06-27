@@ -19,7 +19,7 @@ func init() {
 			if !ok {
 				return nil, channels.ErrSendFailed
 			}
-			ch, err := NewPicoChannel(bc, c, b)
+			ch, err := NewPicoChannel(bc, c, b, cfg.Agents.Defaults.GetMaxMediaSize())
 			if err != nil {
 				return nil, err
 			}
@@ -41,7 +41,7 @@ func init() {
 			if !ok {
 				return nil, channels.ErrSendFailed
 			}
-			ch, err := NewPicoClientChannel(bc, c, b)
+			ch, err := NewPicoClientChannel(bc, c, b, cfg.Agents.Defaults.GetMaxMediaSize())
 			if err != nil {
 				return nil, err
 			}

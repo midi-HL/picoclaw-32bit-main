@@ -591,6 +591,9 @@ export function ConfigPage() {
             defaults: {
               workspace,
               restrict_to_workspace: form.restrictToWorkspace,
+              allow_read_outside_workspace: form.allowReadOutsideWorkspace,
+              allow_read_paths: parseMultilineList(form.allowReadPathsText),
+              allow_write_paths: parseMultilineList(form.allowWritePathsText),
               split_on_marker: form.splitOnMarker,
               tool_feedback: {
                 enabled: form.toolFeedbackEnabled,

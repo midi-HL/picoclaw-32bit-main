@@ -308,7 +308,7 @@ func TestPicoChannel_HandleMessageSend_AllowsMediaOnly(t *testing.T) {
 	bc := &config.Channel{Type: "pico", Enabled: true}
 	ch, err := NewPicoChannel(bc, &config.PicoSettings{
 		Token: *config.NewSecureString("test-token"),
-	}, mb)
+	}, mb, 0)
 	if err != nil {
 		t.Fatalf("NewPicoChannel() error = %v", err)
 	}

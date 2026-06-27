@@ -97,6 +97,7 @@ type PicoChannel struct {
 	*channels.BaseChannel
 	bc                 *config.Channel
 	config             *config.PicoSettings
+	maxMediaSize       int
 	upgrader           websocket.Upgrader
 	connections        map[string]*picoConn            // connID -> *picoConn
 	sessionConnections map[string]map[string]*picoConn // sessionID -> connID -> *picoConn
@@ -112,6 +113,7 @@ func NewPicoChannel(
 	bc *config.Channel,
 	cfg *config.PicoSettings,
 	messageBus *bus.MessageBus,
+	maxMediaSize int,
 ) (*PicoChannel, error) {
 	if cfg.Token.String() == "" {
 		return nil, fmt.Errorf("pico token is required")
@@ -137,6 +139,7 @@ func NewPicoChannel(
 		BaseChannel: base,
 		bc:          bc,
 		config:      cfg,
+		maxMediaSize: maxMediaSize,
 		upgrader: websocket.Upgrader{
 			CheckOrigin:     checkOrigin,
 			ReadBufferSize:  1024,
@@ -1170,7 +1173,7 @@ func (c *PicoChannel) handleMessage(pc *picoConn, msg PicoMessage) {
 // handleMessageSend processes an inbound message.send from a client.
 func (c *PicoChannel) handleMessageSend(pc *picoConn, msg PicoMessage) {
 	content, _ := msg.Payload["content"].(string)
-	media, err := parseInlineImageMedia(msg.Payload)
+	media, err := parseInlineImageMedia(msg.Payload, c.maxMediaSize)
 	if err != nil {
 		errMsg := newErrorWithPayload("invalid_media", err.Error(), map[string]any{
 			"request_id": msg.ID,
@@ -1238,17 +1241,17 @@ func truncate(s string, maxLen int) string {
 	return string(runes[:maxLen]) + "..."
 }
 
-func parseInlineImageMedia(payload map[string]any) ([]string, error) {
+func parseInlineImageMedia(payload map[string]any, maxSize int) ([]string, error) {
 	if len(payload) == 0 {
 		return nil, nil
 	}
 
-	media, err := parseInlineImageValues(payload["media"])
+	media, err := parseInlineImageValues(payload["media"], maxSize)
 	if err != nil {
 		return nil, err
 	}
 
-	attachments, err := parseInlineImageAttachments(payload["attachments"])
+	attachments, err := parseInlineImageAttachments(payload["attachments"], maxSize)
 	if err != nil {
 		return nil, err
 	}
@@ -1257,7 +1260,7 @@ func parseInlineImageMedia(payload map[string]any) ([]string, error) {
 	return media, nil
 }
 
-func parseInlineImageValues(raw any) ([]string, error) {
+func parseInlineImageValues(raw any, maxSize int) ([]string, error) {
 	if raw == nil {
 		return nil, nil
 	}
@@ -1269,7 +1272,7 @@ func parseInlineImageValues(raw any) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("media[%d]: %w", i, err)
 			}
-			if err := validateInlineImageDataURL(value); err != nil {
+			if err := validateInlineImageDataURL(value, maxSize); err != nil {
 				return nil, fmt.Errorf("media[%d]: %w", i, err)
 			}
 			media = append(media, value)
@@ -1279,7 +1282,7 @@ func parseInlineImageValues(raw any) ([]string, error) {
 		media := make([]string, 0, len(values))
 		for i, value := range values {
 			value = strings.TrimSpace(value)
-			if err := validateInlineImageDataURL(value); err != nil {
+			if err := validateInlineImageDataURL(value, maxSize); err != nil {
 				return nil, fmt.Errorf("media[%d]: %w", i, err)
 			}
 			media = append(media, value)
@@ -1287,7 +1290,7 @@ func parseInlineImageValues(raw any) ([]string, error) {
 		return media, nil
 	case string:
 		value := strings.TrimSpace(values)
-		if err := validateInlineImageDataURL(value); err != nil {
+		if err := validateInlineImageDataURL(value, maxSize); err != nil {
 			return nil, err
 		}
 		return []string{value}, nil
@@ -1296,7 +1299,7 @@ func parseInlineImageValues(raw any) ([]string, error) {
 	}
 }
 
-func parseInlineImageAttachments(raw any) ([]string, error) {
+func parseInlineImageAttachments(raw any, maxSize int) ([]string, error) {
 	if raw == nil {
 		return nil, nil
 	}
@@ -1329,7 +1332,7 @@ func parseInlineImageAttachments(raw any) ([]string, error) {
 		if !strings.HasPrefix(value, "data:") {
 			continue
 		}
-		if err := validateInlineImageDataURL(value); err != nil {
+		if err := validateInlineImageDataURL(value, maxSize); err != nil {
 			return nil, fmt.Errorf("attachments[%d]: %w", i, err)
 		}
 		media = append(media, value)
@@ -1357,7 +1360,7 @@ func inlineImageValue(item any) (string, error) {
 	}
 }
 
-func validateInlineImageDataURL(mediaURL string) error {
+func validateInlineImageDataURL(mediaURL string, maxSize int) error {
 	if mediaURL == "" {
 		return fmt.Errorf("image payload is empty")
 	}
@@ -1378,8 +1381,11 @@ func validateInlineImageDataURL(mediaURL string) error {
 	}
 
 	data = strings.TrimSpace(data)
-	if base64.StdEncoding.DecodedLen(len(data)) > config.DefaultMaxMediaSize {
-		return fmt.Errorf("image exceeds %d byte limit", config.DefaultMaxMediaSize)
+	if maxSize <= 0 {
+		maxSize = config.DefaultMaxMediaSize
+	}
+	if base64.StdEncoding.DecodedLen(len(data)) > maxSize {
+		return fmt.Errorf("image exceeds %d byte limit", maxSize)
 	}
 	if _, err := base64.StdEncoding.DecodeString(data); err != nil {
 		return fmt.Errorf("invalid base64 image data")

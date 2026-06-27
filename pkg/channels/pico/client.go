@@ -22,8 +22,9 @@ import (
 // PicoClientChannel connects to a remote Pico Protocol WebSocket server.
 type PicoClientChannel struct {
 	*channels.BaseChannel
-	config *config.PicoClientSettings
-	conn   *picoConn
+	config       *config.PicoClientSettings
+	maxMediaSize int
+	conn         *picoConn
 	mu     sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -34,6 +35,7 @@ func NewPicoClientChannel(
 	bc *config.Channel,
 	cfg *config.PicoClientSettings,
 	messageBus *bus.MessageBus,
+	maxMediaSize int,
 ) (*PicoClientChannel, error) {
 	if cfg.URL == "" {
 		return nil, fmt.Errorf("pico_client url is required")
@@ -44,6 +46,7 @@ func NewPicoClientChannel(
 	return &PicoClientChannel{
 		BaseChannel: base,
 		config:      cfg,
+		maxMediaSize: maxMediaSize,
 	}, nil
 }
 
@@ -250,7 +253,7 @@ func (c *PicoClientChannel) handleServerMessage(pc *picoConn, msg PicoMessage) {
 	}
 
 	content, _ := msg.Payload[PayloadKeyContent].(string)
-	media, err := parseInlineImageMedia(msg.Payload)
+	media, err := parseInlineImageMedia(msg.Payload, c.maxMediaSize)
 	if err != nil {
 		logger.WarnCF("pico_client", "Ignoring invalid media payload", map[string]any{
 			"error": err.Error(),

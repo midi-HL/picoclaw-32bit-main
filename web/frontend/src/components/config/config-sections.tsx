@@ -138,6 +138,50 @@ export function AgentDefaultsSection({
         }
       />
 
+      {form.restrictToWorkspace && (
+        <>
+          <SwitchCardField
+            label={t("pages.config.allow_read_outside")}
+            hint={t("pages.config.allow_read_outside_hint")}
+            layout="setting-row"
+            checked={form.allowReadOutsideWorkspace}
+            onCheckedChange={(checked) =>
+              onFieldChange("allowReadOutsideWorkspace", checked)
+            }
+          />
+
+          <Field
+            label={t("pages.config.allow_read_paths")}
+            hint={t("pages.config.allow_read_paths_hint")}
+            layout="setting-row"
+          >
+            <Textarea
+              value={form.allowReadPathsText}
+              onChange={(e) =>
+                onFieldChange("allowReadPathsText", e.target.value)
+              }
+              placeholder={t("pages.config.allow_paths_placeholder")}
+              rows={3}
+            />
+          </Field>
+
+          <Field
+            label={t("pages.config.allow_write_paths")}
+            hint={t("pages.config.allow_write_paths_hint")}
+            layout="setting-row"
+          >
+            <Textarea
+              value={form.allowWritePathsText}
+              onChange={(e) =>
+                onFieldChange("allowWritePathsText", e.target.value)
+              }
+              placeholder={t("pages.config.allow_paths_placeholder")}
+              rows={3}
+            />
+          </Field>
+        </>
+      )}
+
       <SwitchCardField
         label={t("pages.config.split_on_marker")}
         hint={t("pages.config.split_on_marker_hint")}
