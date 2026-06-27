@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
 var resolvedImagePathTagRegex = regexp.MustCompile(`\[image:[^\s\]][^\]]*\]`)
@@ -131,25 +133,115 @@ func messagesContainVideo(messages []providers.Message) bool {
 	return false
 }
 
+// describeVideoProxy sends video to the video_model with a description prompt,
+// then replaces the video data URLs in the messages with the description.
+// This implements the "delegation" pattern: video_model describes → main model uses description.
+func (p *Pipeline) describeVideoProxy(ts *turnState, exec *turnExecution) error {
+	if p == nil || ts == nil || ts.agent == nil || exec == nil {
+		return nil
+	}
+	videoModel := strings.TrimSpace(p.Cfg.Agents.Defaults.VideoModel)
+	if videoModel == "" || len(ts.agent.VideoCandidates) == 0 {
+		return nil
+	}
+
+	turnMsgs := currentTurnMessages(exec.callMessages, exec.currentTurnStart)
+	if !messagesContainVideo(turnMsgs) {
+		return nil
+	}
+
+	// Get the video model provider
+	videoProvider := ts.agent.Provider
+	firstCandidate := ts.agent.VideoCandidates[0]
+	if provider, err := providerForFallbackCandidate(
+		ts.agent, ts.agent.Provider, ts.agent.VideoCandidates,
+		firstCandidate.Provider, firstCandidate.Model,
+	); err == nil && provider != nil {
+		videoProvider = provider
+	}
+
+	resolvedModel := resolvedCandidateModel(ts.agent.VideoCandidates, videoModel)
+
+	// Process each message with video
+	for i := range exec.callMessages {
+		msg := &exec.callMessages[i]
+		if len(msg.Media) == 0 {
+			continue
+		}
+
+		var videoDataURLs []string
+		var remainingMedia []string
+		for _, ref := range msg.Media {
+			if strings.HasPrefix(ref, "data:video/") {
+				videoDataURLs = append(videoDataURLs, ref)
+			} else {
+				remainingMedia = append(remainingMedia, ref)
+			}
+		}
+
+		if len(videoDataURLs) == 0 {
+			continue
+		}
+
+		// Describe each video
+		for _, videoURL := range videoDataURLs {
+			describeMsg := providers.Message{
+				Role:    "user",
+				Content: "Describe this video in detail. Include: what is happening, key objects, people, actions, scene setting, and any notable details. Be specific and factual.",
+				Media:   []string{videoURL},
+			}
+
+			resp, err := videoProvider.Chat(
+				context.Background(),
+				[]providers.Message{describeMsg},
+				nil,
+				resolvedModel,
+				nil,
+			)
+			if err != nil {
+				logger.WarnCF("agent", "Video description proxy failed", map[string]any{
+					"model": videoModel,
+					"error": err.Error(),
+				})
+				continue
+			}
+
+			description := strings.TrimSpace(resp.Content)
+			if description == "" {
+				continue
+			}
+
+			// Inject description into the message content
+			msg.Content = msg.Content + "\n\n[系统消息：以下是用户发送视频的描述]\n" + description
+			logger.InfoCF("agent", "Video described by proxy model", map[string]any{
+				"model":       videoModel,
+				"description": utils.Truncate(description, 100),
+			})
+		}
+
+		// Remove video from media (already described)
+		msg.Media = remainingMedia
+	}
+
+	return nil
+}
+
 func (p *Pipeline) routeMediaTurn(ts *turnState, exec *turnExecution) error {
 	if p == nil || ts == nil || ts.agent == nil || exec == nil ||
 		!messagesContainCurrentTurnMediaTurn(currentTurnMessages(exec.callMessages, exec.currentTurnStart)) {
 		return nil
 	}
 
+	// First, try video proxy (describe video with video_model, then pass to main model)
+	if err := p.describeVideoProxy(ts, exec); err != nil {
+		return err
+	}
+
 	var targetCandidates []providers.FallbackCandidate
 	var targetModelName string
 	var routeReason string
 
-	turnMsgs := currentTurnMessages(exec.callMessages, exec.currentTurnStart)
-
 	switch {
-	// Video-specific routing: if video is present and video_model is configured,
-	// route to the video model (which handles video_url format natively).
-	case messagesContainVideo(turnMsgs) && len(ts.agent.VideoCandidates) > 0:
-		targetCandidates = append([]providers.FallbackCandidate(nil), ts.agent.VideoCandidates...)
-		targetModelName = strings.TrimSpace(p.Cfg.Agents.Defaults.VideoModel)
-		routeReason = "configured_video_model"
 	case len(ts.agent.ImageCandidates) > 0:
 		targetCandidates = append([]providers.FallbackCandidate(nil), ts.agent.ImageCandidates...)
 		targetModelName = strings.TrimSpace(p.Cfg.Agents.Defaults.ImageModel)
