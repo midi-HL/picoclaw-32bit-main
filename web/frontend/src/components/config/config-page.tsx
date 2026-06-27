@@ -598,13 +598,19 @@ export function ConfigPage() {
           })
         }
         if (form.ttsEnabled && form.ttsProvider === "mimo" && form.ttsMimoApiKey.trim()) {
-          modelListPatch.push({
-            model_name: form.ttsModelName.trim() || "mimo-v2.5-tts",
-            provider: "openai",
-            model: form.ttsModelName.trim() || "mimo-v2.5-tts",
+          const ttsModelName = form.ttsModelName.trim() || "mimo-v2.5-tts"
+          const ttsEntry: Record<string, unknown> = {
+            model_name: ttsModelName,
+            provider: "mimo",
+            model: ttsModelName,
             api_base: "https://api.xiaomimimo.com/v1",
             api_keys: [form.ttsMimoApiKey.trim()],
-          })
+          }
+          // Add voice for preset voice variants
+          if (form.ttsMimoVariant === "mimo-v2.5-tts" || form.ttsMimoVariant === "mimo-v2-tts") {
+            ttsEntry.extra_body = { voice: form.ttsMimoVoice || "mimo_default" }
+          }
+          modelListPatch.push(ttsEntry)
         }
 
         const patchPayload: Record<string, unknown> = {

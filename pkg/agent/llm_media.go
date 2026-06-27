@@ -119,6 +119,18 @@ func messagesContainCurrentTurnMediaTurn(messages []providers.Message) bool {
 	return false
 }
 
+// messagesContainVideo checks if any message in the current turn contains video data URLs.
+func messagesContainVideo(messages []providers.Message) bool {
+	for _, msg := range messages {
+		for _, ref := range msg.Media {
+			if strings.HasPrefix(ref, "data:video/") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (p *Pipeline) routeMediaTurn(ts *turnState, exec *turnExecution) error {
 	if p == nil || ts == nil || ts.agent == nil || exec == nil ||
 		!messagesContainCurrentTurnMediaTurn(currentTurnMessages(exec.callMessages, exec.currentTurnStart)) {
@@ -129,7 +141,15 @@ func (p *Pipeline) routeMediaTurn(ts *turnState, exec *turnExecution) error {
 	var targetModelName string
 	var routeReason string
 
+	turnMsgs := currentTurnMessages(exec.callMessages, exec.currentTurnStart)
+
 	switch {
+	// Video-specific routing: if video is present and video_model is configured,
+	// route to the video model (which handles video_url format natively).
+	case messagesContainVideo(turnMsgs) && len(ts.agent.VideoCandidates) > 0:
+		targetCandidates = append([]providers.FallbackCandidate(nil), ts.agent.VideoCandidates...)
+		targetModelName = strings.TrimSpace(p.Cfg.Agents.Defaults.VideoModel)
+		routeReason = "configured_video_model"
 	case len(ts.agent.ImageCandidates) > 0:
 		targetCandidates = append([]providers.FallbackCandidate(nil), ts.agent.ImageCandidates...)
 		targetModelName = strings.TrimSpace(p.Cfg.Agents.Defaults.ImageModel)
