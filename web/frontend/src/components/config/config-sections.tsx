@@ -1430,51 +1430,61 @@ export function ASRSection({
               </Select>
             </Field>
 
-            {isMimo ? (
-              <Field
-                label={t("pages.config.asr_mimo_language")}
-                hint={t("pages.config.asr_mimo_language_hint")}
-                layout="setting-row"
-              >
-                <Select
-                  value={form.asrMimoLanguage}
-                  onValueChange={(v) =>
-                    onFieldChange(
-                      "asrMimoLanguage",
-                      v as "auto" | "zh" | "en",
-                    )
-                  }
+            <Field
+              label={t("pages.config.asr_model")}
+              hint={isMimo ? t("pages.config.asr_model_mimo_hint") : t("pages.config.asr_model_hint")}
+              layout="setting-row"
+            >
+              <Input
+                value={form.asrModelName}
+                onChange={(e) => onFieldChange("asrModelName", e.target.value)}
+                placeholder={isMimo ? "mimo-v2.5-asr" : "model_list中的model_name"}
+              />
+            </Field>
+
+            {isMimo && (
+              <>
+                <Field
+                  label={t("pages.config.asr_mimo_language")}
+                  hint={t("pages.config.asr_mimo_language_hint")}
+                  layout="setting-row"
                 >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">
-                      {t("pages.config.asr_lang_auto")}
-                    </SelectItem>
-                    <SelectItem value="zh">
-                      {t("pages.config.asr_lang_zh")}
-                    </SelectItem>
-                    <SelectItem value="en">
-                      {t("pages.config.asr_lang_en")}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            ) : (
-              <Field
-                label={t("pages.config.asr_model")}
-                hint={t("pages.config.asr_model_hint")}
-                layout="setting-row"
-              >
-                <Input
-                  value={form.asrModelName}
-                  onChange={(e) =>
-                    onFieldChange("asrModelName", e.target.value)
-                  }
-                  placeholder="openai/whisper-1"
-                />
-              </Field>
+                  <Select
+                    value={form.asrMimoLanguage}
+                    onValueChange={(v) =>
+                      onFieldChange("asrMimoLanguage", v as "auto" | "zh" | "en")
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        {t("pages.config.asr_lang_auto")}
+                      </SelectItem>
+                      <SelectItem value="zh">
+                        {t("pages.config.asr_lang_zh")}
+                      </SelectItem>
+                      <SelectItem value="en">
+                        {t("pages.config.asr_lang_en")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field
+                  label={t("pages.config.mimo_api_key")}
+                  hint={t("pages.config.mimo_api_key_hint")}
+                  layout="setting-row"
+                >
+                  <Input
+                    type="password"
+                    value={form.asrMimoApiKey}
+                    onChange={(e) => onFieldChange("asrMimoApiKey", e.target.value)}
+                    placeholder={t("pages.config.mimo_api_key_placeholder")}
+                  />
+                </Field>
+              </>
             )}
           </div>
         )}
@@ -1666,6 +1676,19 @@ export function TTSSection({
                     </div>
                   </Field>
                 )}
+
+                <Field
+                  label={t("pages.config.mimo_api_key")}
+                  hint={t("pages.config.mimo_api_key_hint")}
+                  layout="setting-row"
+                >
+                  <Input
+                    type="password"
+                    value={form.ttsMimoApiKey}
+                    onChange={(e) => onFieldChange("ttsMimoApiKey", e.target.value)}
+                    placeholder={t("pages.config.mimo_api_key_placeholder")}
+                  />
+                </Field>
               </>
             ) : (
               <Field
@@ -1678,7 +1701,7 @@ export function TTSSection({
                   onChange={(e) =>
                     onFieldChange("ttsModelName", e.target.value)
                   }
-                  placeholder="openai/tts-1"
+                  placeholder="model_list中的model_name"
                 />
               </Field>
             )}

@@ -48,6 +48,7 @@ export interface CoreConfigForm {
   asrModelName: string
   asrProvider: "generic" | "mimo"
   asrMimoLanguage: "auto" | "zh" | "en"
+  asrMimoApiKey: string
   // TTS
   ttsEnabled: boolean
   ttsModelName: string
@@ -55,6 +56,7 @@ export interface CoreConfigForm {
   ttsMimoVariant: "mimo-v2.5-tts" | "mimo-v2.5-tts-voicedesign" | "mimo-v2.5-tts-voiceclone" | "mimo-v2-tts"
   ttsMimoVoice: string
   ttsMimoVoiceDesignText: string
+  ttsMimoApiKey: string
   ttsMimoVoiceCloneFileName: string
   ttsMimoVoiceCloneData: string
   // Vision
@@ -209,6 +211,7 @@ export const EMPTY_FORM: CoreConfigForm = {
   asrModelName: "",
   asrProvider: "generic",
   asrMimoLanguage: "auto",
+  asrMimoApiKey: "",
   ttsEnabled: false,
   ttsModelName: "",
   ttsProvider: "generic",
@@ -217,6 +220,7 @@ export const EMPTY_FORM: CoreConfigForm = {
   ttsMimoVoiceDesignText: "",
   ttsMimoVoiceCloneFileName: "",
   ttsMimoVoiceCloneData: "",
+  ttsMimoApiKey: "",
   visionEnabled: false,
   visionModelName: "",
   videoEnabled: false,
@@ -528,6 +532,7 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
       if (lang === "zh" || lang === "en") return lang
       return "auto"
     })(),
+    asrMimoApiKey: asString(asRecord(voice.mimo_config).asr_api_key),
     ttsModelName: asString(voice.tts_model_name),
     ttsEnabled: asString(voice.tts_model_name) !== "" || asBool(sendTTS.enabled),
     ttsProvider:
@@ -548,6 +553,7 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
     ttsMimoVoiceDesignText: asString(asRecord(voice.mimo_config).tts_voice_design_text),
     ttsMimoVoiceCloneFileName: asString(asRecord(voice.mimo_config).tts_voice_clone_filename),
     ttsMimoVoiceCloneData: asString(asRecord(voice.mimo_config).tts_voice_clone_data),
+    ttsMimoApiKey: asString(asRecord(voice.mimo_config).tts_api_key),
     visionModelName: asString(defaults.image_model),
     visionEnabled: asString(defaults.image_model) !== "",
     videoModelName: asString(defaults.video_model),

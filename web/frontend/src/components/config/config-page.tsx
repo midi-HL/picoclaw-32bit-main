@@ -586,7 +586,28 @@ export function ConfigPage() {
           { min: 1 },
         )
 
-        await patchAppConfig({
+        // Auto-create model_list entries for MiMo models with API keys
+        const modelListPatch: Record<string, unknown>[] = []
+        if (form.asrEnabled && form.asrProvider === "mimo" && form.asrMimoApiKey.trim()) {
+          modelListPatch.push({
+            model_name: form.asrModelName.trim() || "mimo-v2.5-asr",
+            provider: "openai",
+            model: form.asrModelName.trim() || "mimo-v2.5-asr",
+            api_base: "https://api.xiaomimimo.com/v1",
+            api_keys: [form.asrMimoApiKey.trim()],
+          })
+        }
+        if (form.ttsEnabled && form.ttsProvider === "mimo" && form.ttsMimoApiKey.trim()) {
+          modelListPatch.push({
+            model_name: form.ttsModelName.trim() || "mimo-v2.5-tts",
+            provider: "openai",
+            model: form.ttsModelName.trim() || "mimo-v2.5-tts",
+            api_base: "https://api.xiaomimimo.com/v1",
+            api_keys: [form.ttsMimoApiKey.trim()],
+          })
+        }
+
+        const patchPayload: Record<string, unknown> = {
           agents: {
             defaults: {
               workspace,
@@ -625,12 +646,14 @@ export function ConfigPage() {
             mimo_config: {
               asr_provider: form.asrProvider,
               asr_language: form.asrMimoLanguage,
+              asr_api_key: form.asrMimoApiKey,
               tts_provider: form.ttsProvider,
               tts_variant: form.ttsMimoVariant,
               tts_voice: form.ttsMimoVoice,
               tts_voice_design_text: form.ttsMimoVoiceDesignText,
               tts_voice_clone_filename: form.ttsMimoVoiceCloneFileName,
               tts_voice_clone_data: form.ttsMimoVoiceCloneData,
+              tts_api_key: form.ttsMimoApiKey,
             },
           },
           session: {
@@ -673,7 +696,14 @@ export function ConfigPage() {
             enabled: form.devicesEnabled,
             monitor_usb: form.monitorUSB,
           },
-        })
+        }
+
+        // Add model_list entries for MiMo models with API keys
+        if (modelListPatch.length > 0) {
+          patchPayload.model_list = modelListPatch
+        }
+
+        await patchAppConfig(patchPayload)
 
         setBaseline(form)
         queryClient.invalidateQueries({ queryKey: ["config"] })
