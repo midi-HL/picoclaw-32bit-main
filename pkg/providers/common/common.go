@@ -127,12 +127,13 @@ func SerializeMessages(messages []Message) []any {
 				continue
 			}
 
-			if format, data, ok := ParseDataAudioURL(mediaURL); ok {
+			if strings.HasPrefix(mediaURL, "data:audio/") {
+				// Send the full data URL — MiMo and OpenAI-compatible APIs
+				// both accept this format.
 				parts = append(parts, map[string]any{
 					"type": "input_audio",
 					"input_audio": map[string]any{
-						"data":   data,
-						"format": format,
+						"data": mediaURL,
 					},
 				})
 			}
