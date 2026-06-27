@@ -119,10 +119,17 @@ func resolveMediaRefs(
 			mime := detectMIME(localPath, meta)
 			pathTags = append(pathTags, buildPathTag(mime, localPath))
 
-			if m.Role == "tool" && idx >= currentTurnStart && strings.HasPrefix(mime, "image/") {
-				dataURL := encodeImageToDataURL(localPath, mime, info, maxSize)
-				if dataURL != "" {
-					pendingToolImages = append(pendingToolImages, dataURL)
+			if m.Role == "tool" && idx >= currentTurnStart {
+				if strings.HasPrefix(mime, "image/") {
+					dataURL := encodeImageToDataURL(localPath, mime, info, maxSize)
+					if dataURL != "" {
+						pendingToolImages = append(pendingToolImages, dataURL)
+					}
+				} else if strings.HasPrefix(mime, "video/") {
+					dataURL := encodeMediaToDataURL(localPath, mime, info, maxSize)
+					if dataURL != "" {
+						pendingToolImages = append(pendingToolImages, dataURL)
+					}
 				}
 			}
 

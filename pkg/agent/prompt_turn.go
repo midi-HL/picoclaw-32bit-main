@@ -209,9 +209,20 @@ func toolResultPromptMessage(content, toolCallID string, media []string) provide
 }
 
 func toolImageFollowUpPromptMessage(media []string) providers.Message {
+	hasVideo := false
+	for _, m := range media {
+		if strings.HasPrefix(m, "data:video/") {
+			hasVideo = true
+			break
+		}
+	}
+	content := "[Loaded image from tool result above]"
+	if hasVideo {
+		content = "[Loaded video from tool result above — analyze the video content]"
+	}
 	msg := providers.Message{
 		Role:    "user",
-		Content: "[Loaded image from tool result above]",
+		Content: content,
 	}
 	if len(media) > 0 {
 		msg.Media = append([]string(nil), media...)
