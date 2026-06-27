@@ -1264,6 +1264,17 @@ func (c *TelegramChannel) collectTelegramMessageParts(
 			parts.content = append(parts.content, "[audio]")
 		}
 	}
+	if msg.Video != nil {
+		videoPath := c.downloadFile(ctx, msg.Video.FileID, ".mp4")
+		if videoPath != "" {
+			filename := msg.Video.FileName
+			if strings.TrimSpace(filename) == "" {
+				filename = indexedMediaFilename("video", ".mp4", index, total)
+			}
+			parts.mediaPaths = append(parts.mediaPaths, storeMedia(videoPath, filename))
+			parts.content = append(parts.content, "[video]")
+		}
+	}
 	if msg.Document != nil {
 		docPath := c.downloadFile(ctx, msg.Document.FileID, "")
 		if docPath != "" {
