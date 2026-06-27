@@ -125,7 +125,7 @@ func resolveMediaRefs(
 					if dataURL != "" {
 						pendingToolImages = append(pendingToolImages, dataURL)
 					}
-				} else if strings.HasPrefix(mime, "video/") {
+				} else if strings.HasPrefix(mime, "audio/") || strings.HasPrefix(mime, "video/") {
 					dataURL := encodeMediaToDataURL(localPath, mime, info, maxSize)
 					if dataURL != "" {
 						pendingToolImages = append(pendingToolImages, dataURL)
