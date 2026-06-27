@@ -15,16 +15,38 @@ import (
 	"github.com/sipeed/picoclaw/pkg/logger"
 )
 
+// MimoTTSVariant represents which MiMo TTS model variant to use.
+type MimoTTSVariant string
+
+const (
+	MimoTTSVariantPreset     MimoTTSVariant = "mimo-v2.5-tts"
+	MimoTTSVariantVoiceDesign MimoTTSVariant = "mimo-v2.5-tts-voicedesign"
+	MimoTTSVariantVoiceClone  MimoTTSVariant = "mimo-v2.5-tts-voiceclone"
+)
+
+// MimoTTSOptions holds configuration for MiMo TTS synthesis.
+type MimoTTSOptions struct {
+	// Variant selects the model variant (preset, voicedesign, voiceclone).
+	Variant MimoTTSVariant
+	// Voice is the preset voice name (e.g. "冰糖", "Chloe").
+	// Only used for the preset variant.
+	Voice string
+	// VoiceDesignText is the voice description for voicedesign variant.
+	VoiceDesignText string
+	// VoiceCloneData is the base64-encoded reference audio for voiceclone variant.
+	// Format: "data:audio/mpeg;base64,..." or "data:audio/wav;base64,..."
+	VoiceCloneData string
+}
+
 type MimoTTSProvider struct {
 	apiKey     string
 	apiBase    string
-	voice      string
-	format     string
 	model      string
+	options    MimoTTSOptions
 	httpClient *http.Client
 }
 
-func NewMimoTTSProvider(apiKey string, apiBase string, model string, proxyURL string) *MimoTTSProvider {
+func NewMimoTTSProvider(apiKey string, apiBase string, model string, proxyURL string, opts ...MimoTTSOptions) *MimoTTSProvider {
 	if apiBase == "" {
 		apiBase = "https://api.xiaomimimo.com/v1/chat/completions"
 	} else {
@@ -62,27 +84,35 @@ func NewMimoTTSProvider(apiKey string, apiBase string, model string, proxyURL st
 
 	model = strings.TrimSpace(model)
 	if model == "" {
-		model = "mimo-v2-tts"
+		model = "mimo-v2.5-tts"
+	}
+
+	options := MimoTTSOptions{
+		Variant: MimoTTSVariantPreset,
+		Voice:   "mimo_default",
+	}
+	if len(opts) > 0 {
+		options = opts[0]
+		if options.Variant == "" {
+			options.Variant = MimoTTSVariantPreset
+		}
+		if options.Voice == "" && options.Variant == MimoTTSVariantPreset {
+			options.Voice = "mimo_default"
+		}
 	}
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	if proxyURL != "" {
 		if pURL, err := url.Parse(proxyURL); err == nil {
 			client.Transport = &http.Transport{Proxy: http.ProxyURL(pURL)}
-		} else {
-			logger.WarnF(
-				"NewMimoTTSProvider: invalid proxy URL; proceeding without proxy",
-				map[string]any{"proxyURL": proxyURL, "error": err},
-			)
 		}
 	}
 
 	return &MimoTTSProvider{
 		apiKey:     apiKey,
 		apiBase:    apiBase,
-		voice:      "default_zh", // mimo_default now seems to be an alias for default_en, which is not working for Chinese TTS. default_zh seems to work fine with both English and Chinese, and is likely the intended default for TTS.
-		format:     "mp3",
 		model:      model,
+		options:    options,
 		httpClient: client,
 	}
 }
@@ -92,18 +122,70 @@ func (t *MimoTTSProvider) Name() string {
 }
 
 func (t *MimoTTSProvider) Synthesize(ctx context.Context, text string) (io.ReadCloser, error) {
-	logger.DebugCF("voice-tts", "Starting TTS synthesis", map[string]any{"text_len": len(text), "provider": t.Name()})
+	logger.DebugCF("voice-tts", "Starting TTS synthesis", map[string]any{
+		"text_len": len(text),
+		"provider": t.Name(),
+		"variant":  string(t.options.Variant),
+	})
+
+	// Build messages based on variant
+	messages := make([]map[string]string, 0, 2)
+
+	switch t.options.Variant {
+	case MimoTTSVariantVoiceDesign:
+		// voicedesign: user message = voice description (required)
+		designText := strings.TrimSpace(t.options.VoiceDesignText)
+		if designText == "" {
+			designText = "A natural, clear voice."
+		}
+		messages = append(messages, map[string]string{
+			"role":    "user",
+			"content": designText,
+		})
+
+	case MimoTTSVariantVoiceClone:
+		// voiceclone: user message = empty string
+		messages = append(messages, map[string]string{
+			"role":    "user",
+			"content": "",
+		})
+
+	default:
+		// preset: user message = style instruction (optional)
+		// We don't add a user message by default for preset voices.
+	}
+
+	// assistant message = text to synthesize
+	messages = append(messages, map[string]string{
+		"role":    "assistant",
+		"content": text,
+	})
+
+	// Build audio config based on variant
+	audioConfig := map[string]string{
+		"format": "mp3",
+	}
+
+	switch t.options.Variant {
+	case MimoTTSVariantPreset:
+		if t.options.Voice != "" {
+			audioConfig["voice"] = t.options.Voice
+		}
+
+	case MimoTTSVariantVoiceClone:
+		if t.options.VoiceCloneData != "" {
+			audioConfig["voice"] = t.options.VoiceCloneData
+		}
+
+	case MimoTTSVariantVoiceDesign:
+		// No voice field for voicedesign
+	}
 
 	reqBody := map[string]any{
-		"model": t.model,
-		"messages": []map[string]string{
-			{"role": "assistant", "content": text},
-		},
-		"audio": map[string]string{
-			"format": t.format,
-			"voice":  t.voice,
-		},
-		"stream": false,
+		"model":    t.model,
+		"messages": messages,
+		"audio":    audioConfig,
+		"stream":   false,
 	}
 
 	jsonData, err := json.Marshal(reqBody)

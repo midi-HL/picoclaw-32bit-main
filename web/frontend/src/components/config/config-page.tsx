@@ -598,7 +598,7 @@ export function ConfigPage() {
           })
         }
         if (form.ttsEnabled && form.ttsProvider === "mimo" && form.ttsMimoApiKey.trim()) {
-          const ttsModelName = form.ttsModelName.trim() || "mimo-v2.5-tts"
+          const ttsModelName = form.ttsMimoVariant || form.ttsModelName.trim() || "mimo-v2.5-tts"
           const ttsEntry: Record<string, unknown> = {
             model_name: ttsModelName,
             provider: "mimo",
@@ -606,9 +606,24 @@ export function ConfigPage() {
             api_base: "https://api.xiaomimimo.com/v1",
             api_keys: [form.ttsMimoApiKey.trim()],
           }
-          // Add voice for preset voice variants
-          if (form.ttsMimoVariant === "mimo-v2.5-tts" || form.ttsMimoVariant === "mimo-v2-tts") {
-            ttsEntry.extra_body = { voice: form.ttsMimoVoice || "mimo_default" }
+          // Build extra_body based on variant
+          const extraBody: Record<string, unknown> = {}
+          if (ttsModelName === "mimo-v2.5-tts") {
+            // Preset voices
+            extraBody.voice = form.ttsMimoVoice || "mimo_default"
+          } else if (ttsModelName === "mimo-v2.5-tts-voicedesign") {
+            // Voice design - voice description text
+            extraBody.voice_design_text = form.ttsMimoVoiceDesignText || ""
+          } else if (ttsModelName === "mimo-v2.5-tts-voiceclone") {
+            // Voice clone - reference audio as data URL
+            if (form.ttsMimoVoiceCloneData) {
+              const ext = (form.ttsMimoVoiceCloneFileName || "").toLowerCase()
+              const mime = ext.endsWith(".wav") ? "audio/wav" : "audio/mpeg"
+              extraBody.voice_clone_data = `data:${mime};base64,${form.ttsMimoVoiceCloneData}`
+            }
+          }
+          if (Object.keys(extraBody).length > 0) {
+            ttsEntry.extra_body = extraBody
           }
           modelListPatch.push(ttsEntry)
         }

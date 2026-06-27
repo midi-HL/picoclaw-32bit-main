@@ -35,7 +35,8 @@ func providerFromModelConfig(mc *config.ModelConfig) TTSProvider {
 
 	switch protocol {
 	case "mimo":
-		return NewMimoTTSProvider(mc.APIKey(), providers.ResolveAPIBase(mc), modelID, mc.Proxy)
+		opts := mimoTTSOptionsFromModelConfig(mc)
+		return NewMimoTTSProvider(mc.APIKey(), providers.ResolveAPIBase(mc), modelID, mc.Proxy, opts)
 	default:
 		return NewOpenAITTSProviderWithOptions(
 			mc.APIKey(),
@@ -45,6 +46,40 @@ func providerFromModelConfig(mc *config.ModelConfig) TTSProvider {
 			openAITTSOptionsFromModelConfig(mc),
 		)
 	}
+}
+
+func mimoTTSOptionsFromModelConfig(mc *config.ModelConfig) MimoTTSOptions {
+	opts := MimoTTSOptions{
+		Variant: MimoTTSVariantPreset,
+		Voice:   "mimo_default",
+	}
+	if mc == nil {
+		return opts
+	}
+
+	// Determine variant from model name
+	modelLower := strings.ToLower(strings.TrimSpace(mc.Model))
+	if strings.Contains(modelLower, "voiceclone") {
+		opts.Variant = MimoTTSVariantVoiceClone
+	} else if strings.Contains(modelLower, "voicedesign") {
+		opts.Variant = MimoTTSVariantVoiceDesign
+	}
+
+	if mc.ExtraBody == nil {
+		return opts
+	}
+
+	if voice, ok := mc.ExtraBody["voice"].(string); ok {
+		opts.Voice = strings.TrimSpace(voice)
+	}
+	if designText, ok := mc.ExtraBody["voice_design_text"].(string); ok {
+		opts.VoiceDesignText = strings.TrimSpace(designText)
+	}
+	if cloneData, ok := mc.ExtraBody["voice_clone_data"].(string); ok {
+		opts.VoiceCloneData = strings.TrimSpace(cloneData)
+	}
+
+	return opts
 }
 
 func openAITTSOptionsFromModelConfig(mc *config.ModelConfig) OpenAITTSOptions {
