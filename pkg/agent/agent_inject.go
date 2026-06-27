@@ -45,11 +45,6 @@ func (al *AgentLoop) SetMediaStore(s media.MediaStore) {
 			agent.Tools.SetMediaStore(s)
 		}
 	}
-	registry.ForEachTool("send_tts", func(t tools.Tool) {
-		if st, ok := t.(*tools.SendTTSTool); ok {
-			st.SetMediaStore(s)
-		}
-	})
 }
 
 func (al *AgentLoop) SetTranscriber(t asr.Transcriber) {

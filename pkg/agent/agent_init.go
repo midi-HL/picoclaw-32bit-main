@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/agent/interfaces"
-	"github.com/sipeed/picoclaw/pkg/audio/tts"
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/channels"
 	"github.com/sipeed/picoclaw/pkg/commands"
@@ -113,13 +112,6 @@ func registerSharedTools(
 	provider providers.LLMProvider,
 ) {
 	allowReadPaths := buildAllowReadPatterns(cfg)
-	var ttsProvider tts.TTSProvider
-	if cfg.Tools.IsToolEnabled("send_tts") {
-		ttsProvider = tts.DetectTTS(cfg)
-		if ttsProvider == nil {
-			logger.WarnCF("voice-tts", "send_tts enabled but no TTS provider configured", nil)
-		}
-	}
 
 	for _, agentID := range registry.ListAgentIDs() {
 		agent, ok := registry.GetAgent(agentID)
@@ -248,10 +240,6 @@ func registerSharedTools(
 				allowReadPaths,
 			)
 			agent.Tools.Register(sendFileTool)
-		}
-
-		if ttsProvider != nil {
-			agent.Tools.Register(tools.NewSendTTSTool(ttsProvider, nil))
 		}
 
 		if cfg.Tools.IsToolEnabled("load_image") {

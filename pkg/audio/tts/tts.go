@@ -102,14 +102,6 @@ func DetectTTS(cfg *config.Config) TTSProvider {
 		return nil
 	}
 
-	if modelName := strings.TrimSpace(cfg.Voice.TTSModelName); modelName != "" {
-		if mc, err := cfg.GetModelConfig(modelName); err == nil {
-			if provider := providerFromModelConfig(mc); provider != nil {
-				return provider
-			}
-		}
-	}
-
 	for _, mc := range cfg.ModelList {
 		if strings.Contains(strings.ToLower(mc.Model), "tts") && mc.APIKey() != "" {
 			if provider := providerFromModelConfig(mc); provider != nil {

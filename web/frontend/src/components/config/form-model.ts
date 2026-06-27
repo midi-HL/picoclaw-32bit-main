@@ -49,16 +49,6 @@ export interface CoreConfigForm {
   asrProvider: "generic" | "mimo"
   asrMimoLanguage: "auto" | "zh" | "en"
   asrMimoApiKey: string
-  // TTS
-  ttsEnabled: boolean
-  ttsModelName: string
-  ttsProvider: "generic" | "mimo"
-  ttsMimoVariant: "mimo-v2.5-tts" | "mimo-v2.5-tts-voicedesign" | "mimo-v2.5-tts-voiceclone" | "mimo-v2-tts"
-  ttsMimoVoice: string
-  ttsMimoVoiceDesignText: string
-  ttsMimoApiKey: string
-  ttsMimoVoiceCloneFileName: string
-  ttsMimoVoiceCloneData: string
   // Vision
   visionEnabled: boolean
   visionModelName: string
@@ -68,24 +58,6 @@ export interface CoreConfigForm {
   // Max media size (MB)
   maxMediaSizeMB: string
 }
-
-export const MIMO_TTS_PRESET_VOICES = [
-  { value: "mimo_default", label: "MiMo-默认 (mimo_default)" },
-  { value: "冰糖", label: "冰糖 (中文女声)" },
-  { value: "茉莉", label: "茉莉 (中文女声)" },
-  { value: "苏打", label: "苏打 (中文男声)" },
-  { value: "白桦", label: "白桦 (中文男声)" },
-  { value: "Mia", label: "Mia (英文女声)" },
-  { value: "Chloe", label: "Chloe (英文女声)" },
-  { value: "Milo", label: "Milo (英文男声)" },
-  { value: "Dean", label: "Dean (英文男声)" },
-] as const
-
-export const MIMO_TTS_V2_PRESET_VOICES = [
-  { value: "mimo_default", label: "MiMo-默认 (mimo_default)" },
-  { value: "default_zh", label: "MiMo-中文女声 (default_zh)" },
-  { value: "default_en", label: "MiMo-英文女声 (default_en)" },
-] as const
 
 export type MCPServerType = "http" | "sse" | "stdio"
 
@@ -212,15 +184,6 @@ export const EMPTY_FORM: CoreConfigForm = {
   asrProvider: "generic",
   asrMimoLanguage: "auto",
   asrMimoApiKey: "",
-  ttsEnabled: false,
-  ttsModelName: "",
-  ttsProvider: "generic",
-  ttsMimoVariant: "mimo-v2.5-tts",
-  ttsMimoVoice: "mimo_default",
-  ttsMimoVoiceDesignText: "",
-  ttsMimoVoiceCloneFileName: "",
-  ttsMimoVoiceCloneData: "",
-  ttsMimoApiKey: "",
   visionEnabled: false,
   visionModelName: "",
   videoEnabled: false,
@@ -368,7 +331,6 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
   const mcpDiscovery = asRecord(mcp.discovery)
   const cron = asRecord(tools.cron)
   const exec = asRecord(tools.exec)
-  const sendTTS = asRecord(tools.send_tts)
   const toolFeedback = asRecord(defaults.tool_feedback)
   const voice = asRecord(root.voice)
 
@@ -533,27 +495,6 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
       return "auto"
     })(),
     asrMimoApiKey: asString(asRecord(voice.mimo_config).asr_api_key),
-    ttsModelName: asString(voice.tts_model_name),
-    ttsEnabled: asString(voice.tts_model_name) !== "" || asBool(sendTTS.enabled),
-    ttsProvider:
-      asRecord(voice.mimo_config).tts_provider === "mimo" ? "mimo" : "generic",
-    ttsMimoVariant:
-      (() => {
-        const v = asString(asRecord(voice.mimo_config).tts_variant)
-        if (
-          v === "mimo-v2.5-tts" ||
-          v === "mimo-v2.5-tts-voicedesign" ||
-          v === "mimo-v2.5-tts-voiceclone" ||
-          v === "mimo-v2-tts"
-        )
-          return v
-        return "mimo-v2.5-tts" as const
-      })(),
-    ttsMimoVoice: asString(asRecord(voice.mimo_config).tts_voice) || "mimo_default",
-    ttsMimoVoiceDesignText: asString(asRecord(voice.mimo_config).tts_voice_design_text),
-    ttsMimoVoiceCloneFileName: asString(asRecord(voice.mimo_config).tts_voice_clone_filename),
-    ttsMimoVoiceCloneData: asString(asRecord(voice.mimo_config).tts_voice_clone_data),
-    ttsMimoApiKey: asString(asRecord(voice.mimo_config).tts_api_key),
     visionModelName: asString(defaults.image_model),
     visionEnabled: asString(defaults.image_model) !== "",
     videoModelName: asString(defaults.video_model),

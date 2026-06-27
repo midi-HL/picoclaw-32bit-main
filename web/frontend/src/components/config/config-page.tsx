@@ -26,7 +26,6 @@ import {
   LauncherSection,
   MCPSection,
   RuntimeSection,
-  TTSSection,
   VideoModelSection,
   VisionModelSection,
 } from "@/components/config/config-sections"
@@ -597,34 +596,6 @@ export function ConfigPage() {
             api_keys: [form.asrMimoApiKey.trim()],
           })
         }
-        if (form.ttsEnabled && form.ttsProvider === "mimo" && form.ttsMimoApiKey.trim()) {
-          const ttsModelName = form.ttsMimoVariant || form.ttsModelName.trim() || "mimo-v2.5-tts"
-          const ttsEntry: Record<string, unknown> = {
-            model_name: ttsModelName,
-            provider: "mimo",
-            model: ttsModelName,
-            api_base: "https://api.xiaomimimo.com/v1",
-            api_keys: [form.ttsMimoApiKey.trim()],
-          }
-          // Build extra_body based on variant
-          const extraBody: Record<string, unknown> = {}
-          if (ttsModelName === "mimo-v2.5-tts") {
-            // Preset voices
-            extraBody.voice = form.ttsMimoVoice || "mimo_default"
-          } else if (ttsModelName === "mimo-v2.5-tts-voicedesign") {
-            // Voice design - voice description text
-            extraBody.voice_design_text = form.ttsMimoVoiceDesignText || ""
-          } else if (ttsModelName === "mimo-v2.5-tts-voiceclone") {
-            // Voice clone - FileReader.readAsDataURL already produces a data URL
-            if (form.ttsMimoVoiceCloneData) {
-              extraBody.voice_clone_data = form.ttsMimoVoiceCloneData
-            }
-          }
-          if (Object.keys(extraBody).length > 0) {
-            ttsEntry.extra_body = extraBody
-          }
-          modelListPatch.push(ttsEntry)
-        }
 
         const patchPayload: Record<string, unknown> = {
           agents: {
@@ -659,20 +630,10 @@ export function ConfigPage() {
             model_name: form.asrEnabled
               ? form.asrModelName.trim() || null
               : null,
-            tts_model_name: form.ttsEnabled
-              ? form.ttsModelName.trim() || null
-              : null,
             mimo_config: {
               asr_provider: form.asrProvider,
               asr_language: form.asrMimoLanguage,
               asr_api_key: form.asrMimoApiKey,
-              tts_provider: form.ttsProvider,
-              tts_variant: form.ttsMimoVariant,
-              tts_voice: form.ttsMimoVoice,
-              tts_voice_design_text: form.ttsMimoVoiceDesignText,
-              tts_voice_clone_filename: form.ttsMimoVoiceCloneFileName,
-              tts_voice_clone_data: form.ttsMimoVoiceCloneData,
-              tts_api_key: form.ttsMimoApiKey,
             },
           },
           session: {
@@ -702,9 +663,6 @@ export function ConfigPage() {
               enabled: form.mcpEnabled,
               discovery: mcpDiscoveryPatch,
               servers: mcpServersPatch,
-            },
-            send_tts: {
-              enabled: form.ttsEnabled,
             },
           },
           heartbeat: {
@@ -909,7 +867,6 @@ export function ConfigPage() {
               />
 
               <ASRSection form={form} onFieldChange={updateField} />
-              <TTSSection form={form} onFieldChange={updateField} />
               <VisionModelSection form={form} onFieldChange={updateField} />
               <VideoModelSection form={form} onFieldChange={updateField} />
 
