@@ -15,6 +15,7 @@ type (
 	EditFileTool      = fstools.EditFileTool
 	AppendFileTool    = fstools.AppendFileTool
 	LoadImageTool     = fstools.LoadImageTool
+	LoadVideoTool     = fstools.LoadVideoTool
 	SendFileTool      = fstools.SendFileTool
 )
 
@@ -87,6 +88,16 @@ func NewLoadImageTool(
 	allowPaths ...[]*regexp.Regexp,
 ) *LoadImageTool {
 	return fstools.NewLoadImageTool(workspace, restrict, maxFileSize, store, allowPaths...)
+}
+
+func NewLoadVideoTool(
+	workspace string,
+	restrict bool,
+	maxFileSize int,
+	store media.MediaStore,
+	allowPaths ...[]*regexp.Regexp,
+) *LoadVideoTool {
+	return fstools.NewLoadVideoTool(workspace, restrict, maxFileSize, store, allowPaths...)
 }
 
 func NewSendFileTool(
