@@ -17,6 +17,7 @@ before:
 
 builds:
   - id: picoclaw
+    binary: picoclaw
     env:
       - CGO_ENABLED=0
     tags:
@@ -78,6 +79,7 @@ builds:
 
   # 32-bit MIPS builds require special flags (softfloat, no goolm)
   - id: picoclaw-mips
+    binary: picoclaw
     env:
       - CGO_ENABLED=0
       - GOMIPS=softfloat
