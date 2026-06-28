@@ -20,26 +20,70 @@
 
 ---
 
-## 1. MiMo 多模态支持
+## 1. 双重多模态 API 格式支持（标准 OpenAI + MiMo）
 
-**问题：** 上游 provider 代码使用 OpenAI 格式发送音频（`{"data": "base64", "format": "wav"}`），但 MiMo API 要求完整 data URL（`{"data": "data:audio/wav;base64,..."}`）。
+**问题：** 上游 provider 代码使用标准 OpenAI 格式发送音频（`{"data": "base64", "format": "wav"}`），但 MiMo API 要求完整 data URL（`{"data": "data:audio/wav;base64,..."}`）。单一格式无法同时满足两种 provider。
 
-**修改内容：**
-- `pkg/providers/common/common.go` — 新增 `SerializeOptions` 结构体和 `SerializeMessagesWithOptions` 函数，支持按 provider 选择格式：
-  - **音频**：MiMo → 完整 data URL 放入 `data` 字段；标准 → 拆分 base64 + `format` 字段
-  - **视频**：MiMo → `video_url` 格式；标准 → 跳过（无标准类型）
-  - **图片**：始终使用标准 `image_url`（通用）
-- `pkg/providers/openai_compat/provider.go` — 现在传递 `providerName` 和 `apiBase` 给 `SerializeMessagesWithOptions`。
+**解决方案：** 新增 provider 感知的格式选择，自动检测目标 provider 并发送对应格式。
 
-**格式兼容性矩阵：**
+### 实现方案
 
-| 类型 | MiMo 格式 | 标准 OpenAI 格式 | 适用模型 |
-|------|----------|-----------------|---------|
-| 图片 | `image_url` + data URL | `image_url` + data URL | 所有多模态模型 |
-| 音频 | `input_audio.data` = 完整 data URL | `input_audio.data` = base64 + `format` | MiMo / OpenAI |
-| 视频 | `video_url` + `fps` + `media_resolution` | 无标准类型 | 仅 MiMo |
+**`pkg/providers/common/common.go` 中新增类型和函数：**
 
-**向后兼容：** `SerializeMessages()` 仍然使用标准 OpenAI 格式。
+```go
+// SerializeOptions 携带 provider 身份信息，用于格式特定的序列化。
+type SerializeOptions struct {
+    ProviderName string  // 如 "mimo"、"openai"、"anthropic"
+    APIBase      string  // 如 "https://api.xiaomimimo.com/v1"
+}
+
+// Provider 感知的序列化 — 根据目标 provider 选择格式。
+func SerializeMessagesWithOptions(messages []Message, opts *SerializeOptions) []any
+
+// 向后兼容 — 默认使用标准 OpenAI 格式。
+func SerializeMessages(messages []Message) []any
+```
+
+**Provider 检测逻辑：**
+```go
+func isMiMoProvider(opts *SerializeOptions) bool {
+    return opts.ProviderName == "mimo" ||
+           strings.Contains(opts.APIBase, "xiaomimimo.com")
+}
+```
+
+**调用链：**
+```
+openai_compat.Provider.buildRequestBody()
+  → 传递 p.providerName + p.apiBase 作为 SerializeOptions
+  → SerializeMessagesWithOptions 根据 provider 选择格式
+```
+
+### 按 Provider 的格式选择
+
+| 媒体类型 | MiMo Provider | 标准 OpenAI Provider |
+|---------|--------------|---------------------|
+| **图片** | `{"type": "image_url", "image_url": {"url": "data:image/..."}}` | 相同（通用格式） |
+| **音频** | `{"type": "input_audio", "input_audio": {"data": "data:audio/wav;base64,..."}}` | `{"type": "input_audio", "input_audio": {"data": "base64...", "format": "wav"}}` |
+| **视频** | `{"type": "video_url", "video_url": {"url": "data:video/mp4;base64,..."}, "fps": 2, "media_resolution": "default"}` | 跳过（无标准类型） |
+
+### 关键差异说明
+
+**音频格式拆分：**
+- MiMo 要求 **完整 data URL**（`data:audio/wav;base64,...`）放在 `data` 字段，无 `format` 字段
+- 标准 OpenAI 要求 **纯 base64** 放在 `data`，MIME 子类型放在单独的 `format` 字段
+- 代码使用 `ParseDataAudioURL()` 解析 data URL 以提取两部分
+
+**视频格式：**
+- `video_url` 是 MiMo 专用类型，包含 `fps` 和 `media_resolution` 参数
+- 标准 OpenAI 无视频类型 — 非 MiMo provider 会静默跳过视频
+- 回退方案：`video_model` 代理转述可为不支持视频的模型描述视频内容
+
+### 向后兼容
+
+- `SerializeMessages()`（无 options）→ 标准 OpenAI 格式，与上游一致
+- `SerializeMessagesWithOptions(msgs, nil)` → 标准 OpenAI 格式
+- `SerializeMessagesWithOptions(msgs, &SerializeOptions{ProviderName: "mimo"})` → MiMo 格式
 
 ---
 

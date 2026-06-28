@@ -20,26 +20,70 @@ This document describes all modifications made in this fork (`picoclaw-32bit-mai
 
 ---
 
-## 1. MiMo Multimodal Support
+## 1. Dual Multimodal API Format Support (Standard OpenAI + MiMo)
 
-**Problem:** The upstream provider code sends audio in OpenAI format (`{"data": "base64", "format": "wav"}`), but MiMo's API expects a full data URL (`{"data": "data:audio/wav;base64,..."}`).
+**Problem:** The upstream provider code sends audio in standard OpenAI format (`{"data": "base64", "format": "wav"}`), but MiMo's API expects a full data URL (`{"data": "data:audio/wav;base64,..."}`). A single format cannot satisfy both providers.
 
-**Changes:**
-- `pkg/providers/common/common.go` — Added `SerializeOptions` struct and `SerializeMessagesWithOptions` function with provider-aware format selection:
-  - **Audio**: MiMo → full data URL in `data` field; Standard → split base64 + `format` field
-  - **Video**: MiMo → `video_url` with `fps`/`media_resolution`; Standard → skipped (no standard type)
-  - **Image**: Always standard `image_url` (universal)
-- `pkg/providers/openai_compat/provider.go` — Now passes `providerName` and `apiBase` to `SerializeMessagesWithOptions`.
+**Solution:** Added provider-aware format selection that automatically detects the target provider and sends the appropriate format.
 
-**Format compatibility matrix:**
+### Implementation
 
-| Type | MiMo Format | Standard OpenAI Format | Works With |
-|------|------------|----------------------|------------|
-| Image | `image_url` + data URL | `image_url` + data URL | All multimodal models |
-| Audio | `input_audio.data` = full data URL | `input_audio.data` = base64 + `format` field | MiMo / OpenAI |
-| Video | `video_url` + `fps` + `media_resolution` | No standard type | MiMo only |
+**New types and functions in `pkg/providers/common/common.go`:**
 
-**Backward compatible:** `SerializeMessages()` still works with standard OpenAI format for callers that don't pass options.
+```go
+// SerializeOptions carries provider identity for format-specific serialization.
+type SerializeOptions struct {
+    ProviderName string  // e.g. "mimo", "openai", "anthropic"
+    APIBase      string  // e.g. "https://api.xiaomimimo.com/v1"
+}
+
+// Provider-aware serialization — picks format based on target provider.
+func SerializeMessagesWithOptions(messages []Message, opts *SerializeOptions) []any
+
+// Backward-compatible — uses standard OpenAI format by default.
+func SerializeMessages(messages []Message) []any
+```
+
+**Provider detection logic:**
+```go
+func isMiMoProvider(opts *SerializeOptions) bool {
+    return opts.ProviderName == "mimo" ||
+           strings.Contains(opts.APIBase, "xiaomimimo.com")
+}
+```
+
+**Call chain:**
+```
+openai_compat.Provider.buildRequestBody()
+  → passes p.providerName + p.apiBase as SerializeOptions
+  → SerializeMessagesWithOptions selects format per provider
+```
+
+### Format Selection by Provider
+
+| Media Type | MiMo Provider | Standard OpenAI Provider |
+|-----------|--------------|------------------------|
+| **Image** | `{"type": "image_url", "image_url": {"url": "data:image/..."}}` | Same (universal format) |
+| **Audio** | `{"type": "input_audio", "input_audio": {"data": "data:audio/wav;base64,..."}}` | `{"type": "input_audio", "input_audio": {"data": "base64...", "format": "wav"}}` |
+| **Video** | `{"type": "video_url", "video_url": {"url": "data:video/mp4;base64,..."}, "fps": 2, "media_resolution": "default"}` | Skipped (no standard type) |
+
+### Key Differences Explained
+
+**Audio format split:**
+- MiMo expects the **full data URL** (`data:audio/wav;base64,...`) in the `data` field, no `format` field
+- Standard OpenAI expects **raw base64** in `data` and the MIME subtype in a separate `format` field
+- The code parses the data URL with `ParseDataAudioURL()` to extract both parts when needed
+
+**Video format:**
+- `video_url` is a MiMo-specific type with `fps` and `media_resolution` parameters
+- There is no standard OpenAI video type — video is silently skipped for non-MiMo providers
+- Fallback: the `video_model` delegation proxy can describe video content for non-video-capable models
+
+### Backward Compatibility
+
+- `SerializeMessages()` (no options) → standard OpenAI format, same as upstream
+- `SerializeMessagesWithOptions(msgs, nil)` → standard OpenAI format
+- `SerializeMessagesWithOptions(msgs, &SerializeOptions{ProviderName: "mimo"})` → MiMo format
 
 ---
 
