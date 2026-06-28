@@ -655,6 +655,8 @@ For detailed guides beyond this README:
 
 | Topic | Description |
 |-------|-------------|
+| [**Modifications from Upstream**](MODIFICATIONS.md) | **All changes made in this 32-bit fork** |
+| [**API Reference**](docs/api/README.md) | **API endpoints for third-party client development** |
 | [Docker & Quick Start](docs/guides/docker.md) | Docker Compose setup, Launcher/Agent modes |
 | [Chat Apps](docs/guides/chat-apps.md) | All 18+ channel setup guides |
 | [Configuration](docs/guides/configuration.md) | Environment variables, workspace layout, security sandbox |
