@@ -25,16 +25,21 @@
 **问题：** 上游 provider 代码使用 OpenAI 格式发送音频（`{"data": "base64", "format": "wav"}`），但 MiMo API 要求完整 data URL（`{"data": "data:audio/wav;base64,..."}`）。
 
 **修改内容：**
-- `pkg/providers/common/common.go` — `SerializeMessages` 现在在 `input_audio.data` 字段中发送完整 `data:` URL，而不是拆分为 `data` + `format` 字段。
-- `pkg/providers/common/common.go` — 新增 `video_url` 格式支持 MiMo 视频输入：`{"type": "video_url", "video_url": {"url": "data:video/mp4;base64,..."}, "fps": 2}`。
+- `pkg/providers/common/common.go` — 新增 `SerializeOptions` 结构体和 `SerializeMessagesWithOptions` 函数，支持按 provider 选择格式：
+  - **音频**：MiMo → 完整 data URL 放入 `data` 字段；标准 → 拆分 base64 + `format` 字段
+  - **视频**：MiMo → `video_url` 格式；标准 → 跳过（无标准类型）
+  - **图片**：始终使用标准 `image_url`（通用）
+- `pkg/providers/openai_compat/provider.go` — 现在传递 `providerName` 和 `apiBase` 给 `SerializeMessagesWithOptions`。
 
-**MiMo API 格式参考：**
+**格式兼容性矩阵：**
 
-| 类型 | 格式 |
-|------|------|
-| 音频 | `{"type": "input_audio", "input_audio": {"data": "data:audio/wav;base64,..."}}` |
-| 视频 | `{"type": "video_url", "video_url": {"url": "data:video/mp4;base64,..."}, "fps": 2, "media_resolution": "default"}` |
-| 图片 | `{"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}` |
+| 类型 | MiMo 格式 | 标准 OpenAI 格式 | 适用模型 |
+|------|----------|-----------------|---------|
+| 图片 | `image_url` + data URL | `image_url` + data URL | 所有多模态模型 |
+| 音频 | `input_audio.data` = 完整 data URL | `input_audio.data` = base64 + `format` | MiMo / OpenAI |
+| 视频 | `video_url` + `fps` + `media_resolution` | 无标准类型 | 仅 MiMo |
+
+**向后兼容：** `SerializeMessages()` 仍然使用标准 OpenAI 格式。
 
 ---
 
@@ -221,19 +226,11 @@ make build-all
 
 ## 已知限制
 
-### 多模态格式兼容性
+### 视频格式仅限 MiMo
 
-Provider 层（`pkg/providers/common/common.go`）使用 **MiMo 专用格式** 发送音频和视频。这意味着：
+`video_url` 格式是 MiMo 专用的，OpenAI API 中无此类型。使用非 MiMo 模型时，视频内容会被静默跳过。
 
-| 类型 | 当前格式 | 标准 OpenAI 格式 | 兼容性 |
-|------|---------|-----------------|--------|
-| 图片 | `image_url` + data URL | `image_url` + data URL | ✅ 标准 — 所有多模态模型可用 |
-| 音频 | `input_audio.data` = 完整 data URL（`data:audio/wav;base64,...`） | `input_audio.data` = 纯 base64 + 单独 `format` 字段 | ⚠️ MiMo 专用 — 标准 OpenAI 模型可能拒绝 |
-| 视频 | `video_url` + data URL + `fps` + `media_resolution` | OpenAI API 中无此类型 | ❌ MiMo 专用 — 其他 provider 不支持 |
-
-**影响：** 使用非 MiMo 的多模态模型（如 GPT-4o、Gemini）时，图片可正常工作，但音频和视频可能失败或被忽略，因为 provider 使用的是 MiMo 专用格式而非标准 OpenAI 格式。
-
-**解决方案：** 使用 MiMo 模型进行音频/视频分析，或通过 `agents.defaults.image_model` 为多模态任务配置单独的模型（仅限图片）。
+**解决方案：** 配置 `agents.defaults.video_model` 为 MiMo 模型，使用代理转述模式分析视频。
 
 ### 聊天 API 不支持多模态输入
 

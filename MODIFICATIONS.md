@@ -25,16 +25,21 @@ This document describes all modifications made in this fork (`picoclaw-32bit-mai
 **Problem:** The upstream provider code sends audio in OpenAI format (`{"data": "base64", "format": "wav"}`), but MiMo's API expects a full data URL (`{"data": "data:audio/wav;base64,..."}`).
 
 **Changes:**
-- `pkg/providers/common/common.go` — `SerializeMessages` now sends the full `data:` URL in the `input_audio.data` field instead of splitting it into separate `data` + `format` fields.
-- `pkg/providers/common/common.go` — Added `video_url` format support for MiMo video input: `{"type": "video_url", "video_url": {"url": "data:video/mp4;base64,..."}, "fps": 2}`.
+- `pkg/providers/common/common.go` — Added `SerializeOptions` struct and `SerializeMessagesWithOptions` function with provider-aware format selection:
+  - **Audio**: MiMo → full data URL in `data` field; Standard → split base64 + `format` field
+  - **Video**: MiMo → `video_url` with `fps`/`media_resolution`; Standard → skipped (no standard type)
+  - **Image**: Always standard `image_url` (universal)
+- `pkg/providers/openai_compat/provider.go` — Now passes `providerName` and `apiBase` to `SerializeMessagesWithOptions`.
 
-**MiMo API format reference:**
+**Format compatibility matrix:**
 
-| Type | Format |
-|------|--------|
-| Audio | `{"type": "input_audio", "input_audio": {"data": "data:audio/wav;base64,..."}}` |
-| Video | `{"type": "video_url", "video_url": {"url": "data:video/mp4;base64,..."}, "fps": 2, "media_resolution": "default"}` |
-| Image | `{"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}` |
+| Type | MiMo Format | Standard OpenAI Format | Works With |
+|------|------------|----------------------|------------|
+| Image | `image_url` + data URL | `image_url` + data URL | All multimodal models |
+| Audio | `input_audio.data` = full data URL | `input_audio.data` = base64 + `format` field | MiMo / OpenAI |
+| Video | `video_url` + `fps` + `media_resolution` | No standard type | MiMo only |
+
+**Backward compatible:** `SerializeMessages()` still works with standard OpenAI format for callers that don't pass options.
 
 ---
 
@@ -221,19 +226,11 @@ make build-all
 
 ## Known Limitations
 
-### Multimodal Format Compatibility
+### Video Format is MiMo-Only
 
-The provider layer (`pkg/providers/common/common.go`) sends multimodal content in **MiMo-specific formats** for audio and video. This means:
+The `video_url` format used for video input is MiMo-specific. There is no standard OpenAI video type. When using non-MiMo models, video content is silently skipped.
 
-| Type | Fork Format | Standard OpenAI Format | Compatibility |
-|------|------------|----------------------|---------------|
-| Image | `image_url` with data URL | `image_url` with data URL | ✅ Standard — works with all multimodal models |
-| Audio | `input_audio.data` = full data URL (`data:audio/wav;base64,...`) | `input_audio.data` = raw base64 + separate `format` field | ⚠️ MiMo only — standard OpenAI models may reject |
-| Video | `video_url` with data URL + `fps` + `media_resolution` | No standard type in OpenAI API | ❌ MiMo only — not supported by other providers |
-
-**Impact:** When using non-MiMo multimodal models (e.g., GPT-4o, Gemini), images work correctly, but audio and video may fail or be ignored because the provider sends them in MiMo-specific formats rather than the standard OpenAI format.
-
-**Workaround:** Use MiMo models for audio/video analysis, or configure a separate model for multimodal tasks via `agents.defaults.image_model` (images only).
+**Workaround:** Configure `agents.defaults.video_model` to a MiMo model for video analysis — the delegation pattern will describe the video and pass the text to the main model.
 
 ### Chat API Does Not Accept Multimodal Input
 
