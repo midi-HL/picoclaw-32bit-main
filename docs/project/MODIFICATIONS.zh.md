@@ -15,6 +15,7 @@
 - [5. 音频 Data URL 编码](#5-音频-data-url-编码)
 - [6. 配置健壮性](#6-配置健壮性)
 - [7. API 变更](#7-api-变更)
+- [已知限制](#已知限制)
 - [8. 32 位平台支持](#8-32-位平台支持)
 
 ---
@@ -215,3 +216,25 @@ make build-all
 | 内存 | 512 MB |
 | 磁盘 | 100 MB（二进制文件）+ 工作空间存储 |
 | 网络 | 需要互联网访问以调用 LLM API |
+
+---
+
+## 已知限制
+
+### 多模态格式兼容性
+
+Provider 层（`pkg/providers/common/common.go`）使用 **MiMo 专用格式** 发送音频和视频。这意味着：
+
+| 类型 | 当前格式 | 标准 OpenAI 格式 | 兼容性 |
+|------|---------|-----------------|--------|
+| 图片 | `image_url` + data URL | `image_url` + data URL | ✅ 标准 — 所有多模态模型可用 |
+| 音频 | `input_audio.data` = 完整 data URL（`data:audio/wav;base64,...`） | `input_audio.data` = 纯 base64 + 单独 `format` 字段 | ⚠️ MiMo 专用 — 标准 OpenAI 模型可能拒绝 |
+| 视频 | `video_url` + data URL + `fps` + `media_resolution` | OpenAI API 中无此类型 | ❌ MiMo 专用 — 其他 provider 不支持 |
+
+**影响：** 使用非 MiMo 的多模态模型（如 GPT-4o、Gemini）时，图片可正常工作，但音频和视频可能失败或被忽略，因为 provider 使用的是 MiMo 专用格式而非标准 OpenAI 格式。
+
+**解决方案：** 使用 MiMo 模型进行音频/视频分析，或通过 `agents.defaults.image_model` 为多模态任务配置单独的模型（仅限图片）。
+
+### 聊天 API 不支持多模态输入
+
+`/api/chat` 端点仅接受纯文本消息（`{"message": "文本"}`），不支持 OpenAI Messages API 的多部分内容格式（内联图片、音频、视频）。多模态内容仅支持通过频道集成（Telegram、Discord 等）或内部工具结果发送。

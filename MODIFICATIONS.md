@@ -16,6 +16,7 @@ This document describes all modifications made in this fork (`picoclaw-32bit-mai
 - [6. Config Robustness](#6-config-robustness)
 - [7. API Changes](#7-api-changes)
 - [8. 32-bit Platform Support](#8-32-bit-platform-support)
+- [Known Limitations](#known-limitations)
 
 ---
 
@@ -215,3 +216,25 @@ make build-all
 | RAM | 512 MB |
 | Disk | 100 MB (binary) + workspace storage |
 | Network | Internet access for LLM API calls |
+
+---
+
+## Known Limitations
+
+### Multimodal Format Compatibility
+
+The provider layer (`pkg/providers/common/common.go`) sends multimodal content in **MiMo-specific formats** for audio and video. This means:
+
+| Type | Fork Format | Standard OpenAI Format | Compatibility |
+|------|------------|----------------------|---------------|
+| Image | `image_url` with data URL | `image_url` with data URL | ✅ Standard — works with all multimodal models |
+| Audio | `input_audio.data` = full data URL (`data:audio/wav;base64,...`) | `input_audio.data` = raw base64 + separate `format` field | ⚠️ MiMo only — standard OpenAI models may reject |
+| Video | `video_url` with data URL + `fps` + `media_resolution` | No standard type in OpenAI API | ❌ MiMo only — not supported by other providers |
+
+**Impact:** When using non-MiMo multimodal models (e.g., GPT-4o, Gemini), images work correctly, but audio and video may fail or be ignored because the provider sends them in MiMo-specific formats rather than the standard OpenAI format.
+
+**Workaround:** Use MiMo models for audio/video analysis, or configure a separate model for multimodal tasks via `agents.defaults.image_model` (images only).
+
+### Chat API Does Not Accept Multimodal Input
+
+The `/api/chat` endpoint accepts only plain text messages (`{"message": "text"}`). It does not support the OpenAI Messages API format with multipart content (images, audio, video inline). Multimodal content is only supported when sent through channel integrations (Telegram, Discord, etc.) or internal tool results.
