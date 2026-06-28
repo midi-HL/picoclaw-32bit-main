@@ -21,11 +21,10 @@ func decodeJSONWithDiagnostics(data []byte, target any, label string) error {
 	unknownFields := collectUnknownJSONFields(raw, reflect.TypeOf(target), "")
 	if len(unknownFields) > 0 {
 		sort.Strings(unknownFields)
-		return fmt.Errorf(
-			"%s contains unknown field(s): %s",
-			label,
-			strings.Join(unknownFields, ", "),
-		)
+		// Warn but don't fail — allows config files with removed/deprecated
+		// fields to load gracefully.
+		fmt.Fprintf(os.Stderr, "Warning: %s contains unknown field(s): %s (ignored)\n",
+			label, strings.Join(unknownFields, ", "))
 	}
 
 	if err := json.Unmarshal(data, target); err != nil {
