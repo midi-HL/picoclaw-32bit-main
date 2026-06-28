@@ -89,11 +89,42 @@ type openaiFunctionCall struct {
 	ThoughtSignature string `json:"thought_signature,omitempty"`
 }
 
+// SerializeOptions carries provider identity for format-specific serialization.
+type SerializeOptions struct {
+	// ProviderName is the protocol/provider ID (e.g. "mimo", "openai", "anthropic").
+	ProviderName string
+	// APIBase is the provider's API endpoint URL.
+	APIBase string
+}
+
+// isMiMoProvider checks if the target provider is Xiaomi MiMo.
+func isMiMoProvider(opts *SerializeOptions) bool {
+	if opts == nil {
+		return false
+	}
+	if opts.ProviderName == "mimo" {
+		return true
+	}
+	lower := strings.ToLower(strings.TrimSpace(opts.APIBase))
+	return strings.Contains(lower, "xiaomimimo.com")
+}
+
 // SerializeMessages converts internal Message structs to the OpenAI wire format.
-//   - Strips SystemParts (unknown to third-party endpoints)
-//   - Converts messages with Media to multipart content format (text + image_url parts)
-//   - Preserves ToolCallID, ToolCalls, and ReasoningContent for all messages
+// Uses standard OpenAI format for audio (split data+format). For provider-specific
+// formats (e.g. MiMo), use SerializeMessagesWithOptions.
 func SerializeMessages(messages []Message) []any {
+	return SerializeMessagesWithOptions(messages, nil)
+}
+
+// SerializeMessagesWithOptions converts internal Message structs to the wire format,
+// adapting audio/video formats based on the target provider.
+//
+// Format strategy:
+//   - Image: Always standard image_url (universal)
+//   - Audio: MiMo → full data URL in "data" field; Standard → split base64 + "format"
+//   - Video: MiMo → video_url with fps/media_resolution; Standard → skipped (no standard type)
+func SerializeMessagesWithOptions(messages []Message, opts *SerializeOptions) []any {
+	mimo := isMiMoProvider(opts)
 	out := make([]any, 0, len(messages))
 	for _, m := range messages {
 		toolCalls := serializeToolCalls(m.ToolCalls)
@@ -118,6 +149,7 @@ func SerializeMessages(messages []Message) []any {
 		}
 		for _, mediaURL := range m.Media {
 			if strings.HasPrefix(mediaURL, "data:image/") {
+				// Standard image_url — works with all multimodal providers.
 				parts = append(parts, map[string]any{
 					"type": "image_url",
 					"image_url": map[string]any{
@@ -128,28 +160,55 @@ func SerializeMessages(messages []Message) []any {
 			}
 
 			if strings.HasPrefix(mediaURL, "data:audio/") {
-				// Send the full data URL — MiMo and OpenAI-compatible APIs
-				// both accept this format.
-				parts = append(parts, map[string]any{
-					"type": "input_audio",
-					"input_audio": map[string]any{
-						"data": mediaURL,
-					},
-				})
+				if mimo {
+					// MiMo format: full data URL in the "data" field.
+					parts = append(parts, map[string]any{
+						"type": "input_audio",
+						"input_audio": map[string]any{
+							"data": mediaURL,
+						},
+					})
+				} else {
+					// Standard OpenAI format: split base64 data + format field.
+					if format, data, ok := ParseDataAudioURL(mediaURL); ok {
+						parts = append(parts, map[string]any{
+							"type": "input_audio",
+							"input_audio": map[string]any{
+								"data":   data,
+								"format": format,
+							},
+						})
+					}
+				}
 				continue
 			}
 
 			if strings.HasPrefix(mediaURL, "data:video/") {
-				// MiMo video_url format — the model handles frame extraction.
-				parts = append(parts, map[string]any{
-					"type": "video_url",
-					"video_url": map[string]any{
-						"url": mediaURL,
-					},
-					"fps":             2,
-					"media_resolution": "default",
-				})
+				if mimo {
+					// MiMo video_url format — the model handles frame extraction.
+					parts = append(parts, map[string]any{
+						"type": "video_url",
+						"video_url": map[string]any{
+							"url": mediaURL,
+						},
+						"fps":              2,
+						"media_resolution": "default",
+					})
+				}
+				// Non-MiMo providers: skip video (no standard OpenAI video type).
 			}
+		}
+
+		// If media produced no parts (e.g. video on non-MiMo), fall back to text-only.
+		if len(parts) == 0 && len(m.Media) > 0 {
+			out = append(out, openaiMessage{
+				Role:             m.Role,
+				Content:          m.Content,
+				ReasoningContent: m.ReasoningContent,
+				ToolCalls:        toolCalls,
+				ToolCallID:       m.ToolCallID,
+			})
+			continue
 		}
 
 		msg := map[string]any{

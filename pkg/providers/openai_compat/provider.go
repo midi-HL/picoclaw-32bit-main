@@ -150,7 +150,10 @@ func (p *Provider) buildRequestBody(
 
 	requestBody := map[string]any{
 		"model":    model,
-		"messages": common.SerializeMessages(p.prepareMessagesForRequest(messages)),
+		"messages": common.SerializeMessagesWithOptions(p.prepareMessagesForRequest(messages), &common.SerializeOptions{
+			ProviderName: p.providerName,
+			APIBase:      p.apiBase,
+		}),
 	}
 
 	// When fallback uses a different provider (e.g. DeepSeek), that provider must not inject web_search_preview.
