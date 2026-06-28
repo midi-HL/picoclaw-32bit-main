@@ -227,8 +227,6 @@ changelog:
 
 release:
   disable: '{{ isEnvSet "NIGHTLY_BUILD" }}'
-  extra_files:
-    - glob: ./build/picoclaw-android-universal.zip
   footer: >-
 
     ---
