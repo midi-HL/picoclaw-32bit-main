@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -1427,6 +1428,27 @@ func (c *TelegramChannel) downloadPhoto(ctx context.Context, fileID string) stri
 func (c *TelegramChannel) downloadFileWithInfo(file *telego.File, ext string) string {
 	if file.FilePath == "" {
 		return ""
+	}
+
+	// Local Telegram Bot API servers in --local mode return absolute paths
+	// like /root/telegram-bot-api/{TOKEN}/voice/file_0.oga. In this case,
+	// the FileDownloadURL would produce a wrong URL with double slashes.
+	// Instead, read the file directly from the local filesystem.
+	if strings.HasPrefix(file.FilePath, "/") || strings.Contains(file.FilePath, ":\\") {
+		if _, err := os.Stat(file.FilePath); err == nil {
+			logger.DebugCF("telegram", "Local file path detected, reading directly", map[string]any{"path": file.FilePath})
+			// Copy to temp for consistency with the rest of the pipeline
+			tmpDir := filepath.Join(os.TempDir(), "picoclaw_telegram")
+			_ = os.MkdirAll(tmpDir, 0o700)
+			tmpFile := filepath.Join(tmpDir, filepath.Base(file.FilePath))
+			if data, readErr := os.ReadFile(file.FilePath); readErr == nil {
+				if writeErr := os.WriteFile(tmpFile, data, 0o600); writeErr == nil {
+					return tmpFile
+				}
+			}
+			// Fallback: return the original path
+			return file.FilePath
+		}
 	}
 
 	url := c.bot.FileDownloadURL(file.FilePath)
